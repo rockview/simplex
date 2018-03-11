@@ -4,32 +4,36 @@ import(
     "image"
     "image/color"
     "image/draw"
-    "math"
+    "github.com/rockview/fixed"
 )
 
 type Frame struct {
-    width, height int
-    mode int
-    xy_scale float64
-    z_step float64
-    z_depth float64
-    z_state float64
-    hue_options float64
-    hue_state float64
-    min, max float64
+    width       int
+    height      int
+    mode        int
+    xy_scale    fixed.Fixed
+    z_step      fixed.Fixed
+    z_depth     fixed.Fixed
+    z_state     fixed.Fixed
+    hue_options fixed.Fixed
+    hue_state   fixed.Fixed
+    min         fixed.Fixed
+    max         fixed.Fixed
 }
 
 func NewFrame(width, height int) *Frame {
     return &Frame{
-        width: width, height: height,
-        mode: 2,
-        xy_scale:  8.0/64.0,
-        z_step: 0.0125,
-        z_depth: 512,
-        z_state: 0,
-        hue_options: 0.005,
-        hue_state: 0,
-        min: 0.0001, max: 0.0001,
+        width:          width,
+        height:         height,
+        mode:           2,
+        xy_scale:       fixed.FromFloat(8.0/64.0),
+        z_step:         fixed.FromFloat(0.0125),
+        z_depth:        fixed.FromInt(512),
+        z_state:        fixed.Zero,
+        hue_options:    fixed.FromFloat(0.005),
+        hue_state:      fixed.Zero,
+        min:            fixed.FromFloat(0.0001),
+        max:            fixed.FromFloat(0.0001),
     }
 }
 
@@ -37,37 +41,40 @@ func (f *Frame) Next() image.Image {
     m := image.NewRGBA(image.Rect(0, 0, f.width, f.height))
 
     for y := 0; y < f.height; y++ {
-        sy := float64(y)*f.xy_scale;
+        sy := fixed.Mul(fixed.FromInt(y), f.xy_scale)
         for x := 0; x < f.width; x++ {
-            sx := float64(x)*f.xy_scale;
+            sx := fixed.Mul(fixed.FromInt(x), f.xy_scale)
             n1 := noise(sx, sy, f.z_state)
             n2 := noise(sx, sy, f.z_state - f.z_depth)
-            n := ((f.z_depth - f.z_state)*n1 + f.z_state*n2)/f.z_depth
+            n := fixed.Div(fixed.Mul(f.z_depth - f.z_state, n1) + fixed.Mul(f.z_state, n2), f.z_depth)
             if n > f.max {
                 f.max = n
             }
             if n < f.min {
                 f.min = n
             }
-            n += math.Abs(f.min)
-            n /= (f.max + math.Abs(f.min))
+            n += fixed.Abs(f.min)
+            n = fixed.Div(n, f.max + fixed.Abs(f.min))
             r := image.Rect(x, y, x + 1, y + 1)
+            fixed90 := fixed.FromFloat(90.0)
             switch f.mode {
             case 1:
-                hue := int((f.hue_options + n)*90.0 + 0.5)%90
+                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_options + n, fixed90)))%90
                 draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
             case 2:
-                hue := int((f.hue_state + n)*90.0 + 0.5)%90
+                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state + n, fixed90)))%90
                 draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
             case 3:
-                hue := int(f.hue_state*90.0 + 0.5)%90
+                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state, fixed90)))%90
                 draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
             }
         }
     }
 
-    f.z_state = math.Mod(f.z_state + f.z_step, f.z_depth)
-    f.hue_state = math.Mod(f.hue_state + f.hue_options, 1.0)
+    f.z_state = fixed.Mod(f.z_state + f.z_step, f.z_depth)
+    f.hue_state = fixed.Mod(f.hue_state + f.hue_options, fixed.One)
+
+    fixed.ReportLimits()
 
     return m
 }
