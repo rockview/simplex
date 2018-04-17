@@ -1,13 +1,41 @@
+// MIT License
+//
+// Copyright 2018 Jeremy Hall
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// Command line Simplex Noise movie generator.
+//
+// When I use the VLC media player to play this movie on the mac I get a
+// "Broken or missing index" error, but the movie plays OK if I press the "Play
+// as is" button.
+
 package main
 
 import (
-	"os"
-    "bytes"
     "bufio"
-    "image/jpeg"
-    "image/png"
+    "bytes"
     "flag"
     "fmt"
+    "image/jpeg"
+    "image/png"
+	"os"
     "path"
 
     "github.com/icza/mjpeg"
@@ -33,7 +61,8 @@ func main() {
     for i := 0; i < *frames; i++ {
         m := f.Next()
 
-        if true && i == 0 {
+        if false {
+            // Save frame as png
             p, err := os.OpenFile(fmt.Sprintf("frame%02d.png", i), os.O_WRONLY|os.O_CREATE, 0600)
             defer p.Close()
 
@@ -51,6 +80,9 @@ func main() {
         }
 
         err = aw.AddFrame(b.Bytes())
+        if err != nil {
+            fatal("cannot add frame to movie", err)
+        }
     }
 }
 

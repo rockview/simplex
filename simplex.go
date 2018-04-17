@@ -1,32 +1,86 @@
+// MIT License
+// 
+// Copyright 2018 Jeremy Hall
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// Simplex Noise Algorithm.
+//
+// See http://staffwww.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf
+
 package main
 
 import(
     "github.com/rockview/fixed"
 )
 
+// 3D gradient vector
 type Grad struct {
-    x, y, z fixed.Fixed
+    x, y, z int8
 }
 
 var grad3 = [...]Grad{
-     Grad{ 1, 1, 0},
-     Grad{-1, 1, 0},
-     Grad{ 1,-1, 0},
-     Grad{-1,-1, 0},
-     Grad{ 1, 0, 1},
-     Grad{-1, 0, 1},
-     Grad{ 1, 0,-1},
-     Grad{-1, 0,-1},
-     Grad{ 0, 1, 1},
-     Grad{ 0,-1, 1},
-     Grad{ 0, 1,-1},
-     Grad{ 0,-1,-1},
+    Grad{ 1,  1,  0},
+    Grad{-1,  1,  0},
+    Grad{ 1, -1,  0},
+    Grad{-1, -1,  0},
+    Grad{ 1,  0,  1},
+    Grad{-1,  0,  1},
+    Grad{ 1,  0, -1},
+    Grad{-1,  0, -1},
+    Grad{ 0,  1,  1},
+    Grad{ 0, -1,  1},
+    Grad{ 0,  1, -1},
+    Grad{ 0, -1, -1},
 }
 
 var perm [512]int
 var permMod12 [512]int
 
-// 3D simplex noise
+// dot computes the dot product of a gradient vector and point vector
+func dot(g *Grad, x, y, z fixed.Fixed) fixed.Fixed {
+    var r fixed.Fixed
+    switch g.x {
+    case 1:
+        r += x
+    case 0:
+    case -1:
+        r -= x
+    }
+    switch g.y {
+    case 1:
+        r += y
+    case 0:
+    case -1:
+        r -= y
+    }
+    switch g.z {
+    case 1:
+        r += z
+    case 0:
+    case -1:
+        r -= z
+    }
+    return r
+}
+
+// noise returns 3D simplex noise
 func noise(xin, yin, zin fixed.Fixed) fixed.Fixed {
     // Skew the input space to determine which simplex cell we're in
     s := fixed.Mul(xin + yin + zin, fixed.Third)   // Very nice and simple skew factor for 3D
@@ -86,14 +140,14 @@ func noise(xin, yin, zin fixed.Fixed) fixed.Fixed {
     x2 := x0 - fixed.FromInt(i2) + fixed.Third  // Offsets for third corner in (x,y,z) coords
     y2 := y0 - fixed.FromInt(j2) + fixed.Third
     z2 := z0 - fixed.FromInt(k2) + fixed.Third
-    x3 := x0 - fixed.One + fixed.Half // Offsets for last corner in (x,y,z) coords
-    y3 := y0 - fixed.One + fixed.Half
-    z3 := z0 - fixed.One + fixed.Half
+    x3 := x0 - fixed.Half // Offsets for last corner in (x,y,z) coords
+    y3 := y0 - fixed.Half
+    z3 := z0 - fixed.Half
 
     // Work out the hashed gradient indices of the four simplex corners
-    ii := int(i)&255
-    jj := int(j)&255
-    kk := int(k)&255
+    ii := fixed.ToInt(i)&255
+    jj := fixed.ToInt(j)&255
+    kk := fixed.ToInt(k)&255
     gi0 := permMod12[ii + perm[jj + perm[kk]]]
     gi1 := permMod12[ii + i1 + perm[jj + j1 + perm[kk + k1]]]
     gi2 := permMod12[ii + i2 + perm[jj + j2 + perm[kk + k2]]]
@@ -123,10 +177,10 @@ func noise(xin, yin, zin fixed.Fixed) fixed.Fixed {
 
     // Add contributions from each corner to get the final noise value.
     // The result is scaled to stay just inside [-1,1]
-    return fixed.Mul(fixed.FromFloat(32.0), (n0 + n1 + n2 + n3))
+    return fixed.Mul(fixed.FromFloat(32.0), n0 + n1 + n2 + n3)
 }
 
-// Package intialization
+// init intializes the package
 func init() {
     p := [...]int{
         151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
@@ -150,8 +204,4 @@ func init() {
         perm[i] = p[i&255]
         permMod12[i] = perm[i]%12
     }
-}
-
-func dot(g *Grad, x, y, z fixed.Fixed) fixed.Fixed {
-    return fixed.Mul(g.x, x) + fixed.Mul(g.y, y) + fixed.Mul(g.z, z)
 }

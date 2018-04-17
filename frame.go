@@ -1,12 +1,41 @@
+// MIT License
+//
+// Copyright 2018 Jeremy Hall
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// Simplex Noise frame generator.
+//
+// Inspired by code I found here: https://github.com/bikerglen/beagle/tree/master/projects/led-panel-v01/software
+
 package main
 
 import(
+    "fmt"
     "image"
     "image/color"
     "image/draw"
+
     "github.com/rockview/fixed"
 )
 
+// Frame state
 type Frame struct {
     width       int
     height      int
@@ -21,6 +50,7 @@ type Frame struct {
     max         fixed.Fixed
 }
 
+// NewFrame creates a new Frame instance
 func NewFrame(width, height int) *Frame {
     return &Frame{
         width:          width,
@@ -37,16 +67,21 @@ func NewFrame(width, height int) *Frame {
     }
 }
 
+// Next draws the next frame
 func (f *Frame) Next() image.Image {
     m := image.NewRGBA(image.Rect(0, 0, f.width, f.height))
+    fixed90 := fixed.FromInt(90)
 
     for y := 0; y < f.height; y++ {
         sy := fixed.Mul(fixed.FromInt(y), f.xy_scale)
         for x := 0; x < f.width; x++ {
+            // Draw pixel with computed hue
             sx := fixed.Mul(fixed.FromInt(x), f.xy_scale)
             n1 := noise(sx, sy, f.z_state)
             n2 := noise(sx, sy, f.z_state - f.z_depth)
-            n := fixed.Div(fixed.Mul(f.z_depth - f.z_state, n1) + fixed.Mul(f.z_state, n2), f.z_depth)
+            m1 := fixed.Mul(f.z_depth - f.z_state, n1)
+            m2 := fixed.Mul(f.z_state, n2)
+            n := fixed.Div(m1 + m2, f.z_depth)
             if n > f.max {
                 f.max = n
             }
@@ -56,29 +91,30 @@ func (f *Frame) Next() image.Image {
             n += fixed.Abs(f.min)
             n = fixed.Div(n, f.max + fixed.Abs(f.min))
             r := image.Rect(x, y, x + 1, y + 1)
-            fixed90 := fixed.FromFloat(90.0)
+            var hue int
             switch f.mode {
             case 1:
-                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_options + n, fixed90)))%90
-                draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
+                hue = fixed.ToInt(fixed.Round(fixed.Mul(f.hue_options + n, fixed90)))%90
             case 2:
-                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state + n, fixed90)))%90
-                draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
+                hue = fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state + n, fixed90)))%90
             case 3:
-                hue := fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state, fixed90)))%90
-                draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
+                hue = fixed.ToInt(fixed.Round(fixed.Mul(f.hue_state, fixed90)))%90
+            default:
+                panic(fmt.Sprintf("invalid mode: %d", f.mode))
             }
+            draw.Draw(m, r, &image.Uniform{getColor(hue)}, image.ZP, draw.Src)
         }
     }
 
     f.z_state = fixed.Mod(f.z_state + f.z_step, f.z_depth)
     f.hue_state = fixed.Mod(f.hue_state + f.hue_options, fixed.One)
 
-    fixed.ReportLimits()
+    //f.dump()
 
     return m
 }
 
+// RGB hue color values
 var hues = [...][3]uint8{
 	{0xff, 0x00, 0x00},	//  0
 	{0xff, 0x00, 0x11},	//  1
@@ -172,6 +208,23 @@ var hues = [...][3]uint8{
 	{0xff, 0x11, 0x00},	// 89
 }
 
+// getColor returns a color with the given hue
 func getColor(hue int) color.Color {
     return color.RGBA{hues[hue][0], hues[hue][1], hues[hue][2], 0xff}
+}
+
+// dump dumps the frame state for debugging
+func (f *Frame) dump() {
+    fmt.Printf("---\n")
+    fmt.Printf("width:       %d\n", f.width)
+    fmt.Printf("height:      %d\n", f.height)
+    fmt.Printf("mode:        %d\n", f.mode)
+    fmt.Printf("xy_scale:    %f\n", fixed.ToFloat(f.xy_scale))
+    fmt.Printf("z_step:      %f\n", fixed.ToFloat(f.z_step))
+    fmt.Printf("z_depth:     %f\n", fixed.ToFloat(f.z_depth))
+    fmt.Printf("z_state:     %f\n", fixed.ToFloat(f.z_state))
+    fmt.Printf("hue_options: %f\n", fixed.ToFloat(f.hue_options))
+    fmt.Printf("hue_state:   %f\n", fixed.ToFloat(f.hue_state))
+    fmt.Printf("min:         %f\n", fixed.ToFloat(f.min))
+    fmt.Printf("max:         %f\n", fixed.ToFloat(f.max))
 }
